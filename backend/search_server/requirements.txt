@@ -1,0 +1,6 @@
+psycopg2_binary==2.9.11
+quart==0.20.0
+hypercorn
+asyncpg
+redis
+celery

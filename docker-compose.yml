@@ -1,0 +1,82 @@
+services:
+
+  aws-nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      - ./nginx/snippets:/etc/nginx/snippets
+      - ./frontend/dist:/usr/share/nginx/html
+      - ./documents:/app/search_result
+    networks:
+      - pubchat_network
+    depends_on:
+      - search-server
+    restart: always
+
+
+  search-server:
+    build:
+      context: .
+      dockerfile: ./backend/search_server/Dockerfile
+    container_name: search-server
+    env_file:
+      - ./common_utils/.env.shared
+      - ./backend/search_server/.env.shared
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend/search_server:/app/backend/search_server
+      - ./common_utils:/app/common_utils
+      - ./backend/logs:/app/logs
+    command: hypercorn backend.search_server.searchServer:app --bind 0.0.0.0:8000 --reload
+    networks:
+      - pubchat_network
+    restart: always
+
+  celery-worker:
+    image: wuyuxuan1037/pubchat-celery-worker:latest
+    container_name: celery-worker
+    env_file:
+      - ./common_utils/.env.shared
+      - ./backend/celery_worker/.env.shared
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend/celery_worker/logs:/app/celery_worker/search_code/logs
+      - ./documents/:/app/celery_worker/search_code/search_result
+    networks:
+      - pubchat_network
+    restart: always
+    command: celery -A celery_worker.celery_worker.celery_app worker --loglevel=info -Q search_queue --concurrency=4
+
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    env_file:
+      - ./common_utils/.env.shared
+    volumes:
+      - ./db/postgres/data:/var/lib/postgresql/data
+      - ./db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql 
+    networks:
+      - pubchat_network
+    restart: always
+      
+  redis:
+    image: redis:alpine
+    container_name: redis
+    volumes:
+      - ./db/redis/data:/data
+    networks:
+      - pubchat_network
+    restart: always
+
+networks:
+  pubchat_network:
+    name: pubchat_network
+    driver: bridge
