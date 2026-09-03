@@ -1,5 +1,7 @@
 # PubChat：可溯源的多语言生物医学文献智能检索
 
+[中文](README.md) | [English](README.en.md)
+
 PubChat 是一个以 **PubMed** 为数据基础的生物医学文献检索与筛选工具。用户只需输入自然语言研究问题，系统即可完成问题拆解、检索式生成、多轮检索、文献去重、语义预筛选、大模型复核和相关性分层。
 
 与直接让大语言模型“生成参考文献”不同，PubChat 只对 PubMed 检出的真实记录进行筛选与排序，让结果能够回到原始数据库核验，从源头降低虚构引用风险。
@@ -18,6 +20,10 @@ PubChat 是一个以 **PubMed** 为数据基础的生物医学文献检索与筛
   - `Core`：聚焦高度相关文献，适合快速把握核心证据。
 - **八种输出语言**：支持中文、英文、西班牙文、法文、葡萄牙文、意大利文、德文和俄文。
 - **本地 Docker 部署**：通过浏览器使用，便于个人电脑或机构内部环境部署。
+
+![PubChat 系统架构与研究设计](docs/pubchat-system-architecture.png)
+
+*PubChat 系统架构与研究设计：从自然语言问题生成五级相关性标准，再通过动态检索式生成、PubMed 多轮检索、文献去重、语义预筛选和三轮大模型复核完成文献分层（来源：原论文 Fig. 5）。*
 
 ## 为什么使用 PubChat
 
@@ -41,7 +47,15 @@ PubChat 将检索式设计、反复检索、去重、初筛和相关性判断串
 - PubChat-Core 取得最高的 F1 和 F2 综合评分。
 - PubChat 检出的文献均可通过 PubMed 核验，测试中未出现虚构引用。
 
+![PubChat 与主流 AI 文献检索工具的性能比较](docs/pubchat-benchmark-performance.png)
+
+*PubChat 与多款主流 AI 文献检索工具的召回率和精确率比较（来源：原论文 Fig. 2C-D）。*
+
 研究还纳入来自 18 个国家和地区的 279 名生物医学研究人员。PubChat 在可靠性、创新性、效率、用户体验和总体满意度等维度的评分均超过 80 分。
+
+![PubChat 用户评价结果](docs/pubchat-user-assessment.png)
+
+*用户评价核心结果：左侧为各评价维度的评分分布，右侧为 PubChat 与专业工具、通用大语言模型及传统人工检索的主观比较（来源：原论文 Fig. 4D-E）。*
 
 > 上述结果来自论文设定的基准与用户研究，不代表所有主题、网络环境或模型配置下均能得到相同表现。
 
@@ -159,28 +173,3 @@ docker compose down
 欢迎关注微信公众号，获取项目更新与使用交流：
 
 <img src="docs/yixue-ai-ganhuo-wechat-qrcode.jpg" alt="医学AI干货微信公众号二维码" width="50%">
-
----
-
-## English Overview
-
-PubChat is a PubMed-grounded, multilingual biomedical literature retrieval and screening tool. It converts a natural-language research question into relevance criteria and dynamic search strategies, retrieves real PubMed records, removes duplicates, performs semantic pre-screening and multi-round LLM review, and organizes the results by relevance.
-
-### Highlights
-
-- PubMed-grounded and traceable results
-- Broad, Standard, and Core retrieval modes
-- Five-level relevance stratification
-- Semantic pre-screening and three-round LLM review
-- Output in Chinese, English, Spanish, French, Portuguese, Italian, German, or Russian
-- Local deployment with Docker and browser-based use
-
-### Prerequisites
-
-1. Maintain a stable international network access environment for GitHub, Docker Hub, PubMed, and the selected model service.
-2. Install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-3. Register at [OpenRouter](https://openrouter.ai/). Registration and payment setup should be completed in a stable overseas network environment. If payment is required, use a valid U.S. billing address that matches the payment method. Create an API key on the [OpenRouter API Keys](https://openrouter.ai/workspaces/default/keys) page and keep it private.
-
-After installation, open <http://localhost:8000>, select a model provider, enter the corresponding API key, choose a retrieval mode and output language, and submit your research question.
-
-PubChat assists literature retrieval and initial screening. Researchers should still verify full texts, eligibility criteria, and clinical or scientific conclusions independently.
