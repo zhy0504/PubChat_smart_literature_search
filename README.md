@@ -3,9 +3,11 @@
 ## 🇬🇧 English Version
 
 ### 1. Prerequisites
-1. Please use a VPN if your region or country has network limitations, otherwise Docker image pulling will fail.
+1. A stable international network access environment is recommended throughout installation and use, so that GitHub, Docker Hub, and related model services remain accessible. Otherwise, Docker image pulling or service requests may fail.
 
 2. Please ensure **Docker**  https://www.docker.com   is installed and running on your local machine (start Docker Desktop for Win / macOS then continue following steps).
+
+3. Before first use, register an account at [OpenRouter](https://openrouter.ai/). Registration and payment setup should be completed in a stable overseas network environment. If payment is required, use a valid U.S. billing address that matches your payment method.
 
 ### 2. Quick Start Steps
 1.  **Mac/Linux User**
@@ -44,9 +46,11 @@ docker compose down
 ## 🇨🇳 中文版
 
 ### 一、环境准备
-1. 如果所处国家或地区存在网络封锁或异常，请自行开启VPN，否则会出现镜像拉取失败等问题。
+1. 安装及使用过程中，请确保具备稳定的国际网络访问环境，以便正常访问 GitHub、Docker Hub 及相关模型服务；网络条件不满足时，可能出现镜像拉取或服务调用失败。
 
 2. 请确保本地已安装 **Docker**  https://www.docker.com  ， 并且 Docker 服务处于**正常运行状态**（Win / macOS 用户启动 Docker Desktop 再进行后续操作）。
+
+3. 首次使用前，请前往 [OpenRouter](https://openrouter.ai/) 注册账号。注册及付款设置建议在稳定的海外网络环境中完成；如需付款，请填写与支付方式一致的有效美国账单地址。
 
 ### 二、快速启动步骤
 1.  **Mac/Linux用户**
@@ -73,4 +77,9 @@ Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literat
 ```bash
 docker compose down
 ```
-      
+
+## 联系
+
+欢迎关注微信公众号，获取项目更新与使用交流：
+
+<img src="docs/yixue-ai-ganhuo-wechat-qrcode.jpg" alt="医学AI干货微信公众号二维码" width="50%">
