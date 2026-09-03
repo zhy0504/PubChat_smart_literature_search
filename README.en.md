@@ -47,7 +47,7 @@ The associated study used 585 PubMed-indexed articles from 20 Cochrane systemati
 - PubChat-Core achieved the highest combined F1 and F2 scores.
 - All articles retrieved by PubChat could be verified through PubMed, and no fabricated citations were observed in the benchmark.
 
-![Performance comparison between PubChat and leading AI literature-search tools](docs/pubchat-benchmark-performance.png)
+![Performance comparison between PubChat and leading AI literature-search tools](docs/pubchat-benchmark-performance.jpg)
 
 *Recall and precision comparison between PubChat and leading AI literature-search tools (source: Fig. 2C-D of the original paper).*
 

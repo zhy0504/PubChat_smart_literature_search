@@ -47,7 +47,7 @@ PubChat 将检索式设计、反复检索、去重、初筛和相关性判断串
 - PubChat-Core 取得最高的 F1 和 F2 综合评分。
 - PubChat 检出的文献均可通过 PubMed 核验，测试中未出现虚构引用。
 
-![PubChat 与主流 AI 文献检索工具的性能比较](docs/pubchat-benchmark-performance.png)
+![PubChat 与主流 AI 文献检索工具的性能比较](docs/pubchat-benchmark-performance.jpg)
 
 *PubChat 与多款主流 AI 文献检索工具的召回率和精确率比较（来源：原论文 Fig. 2C-D）。*
 
