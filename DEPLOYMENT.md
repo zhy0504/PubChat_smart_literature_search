@@ -18,14 +18,15 @@
   init.sql
 ```
 
-首次准备可以从仓库复制：
+不需要在服务器编译源码，只下载 Compose 文件、数据库初始化脚本和环境变量模板：
 
 ```bash
-git clone https://github.com/zhy0504/PubChat_smart_literature_search.git /opt/pubchat-src
 mkdir -p /opt/pubchat
-cp /opt/pubchat-src/deploy/docker-compose.prod.yml /opt/pubchat/docker-compose.prod.yml
-cp /opt/pubchat-src/db/postgres/init.sql /opt/pubchat/init.sql
-cp /opt/pubchat-src/deploy/.env.example /opt/pubchat/.env
+cd /opt/pubchat
+curl -fL -o docker-compose.prod.yml https://raw.githubusercontent.com/zhy0504/PubChat_smart_literature_search/main/deploy/docker-compose.prod.yml
+curl -fL -o init.sql https://raw.githubusercontent.com/zhy0504/PubChat_smart_literature_search/main/db/postgres/init.sql
+curl -fL -o .env.example https://raw.githubusercontent.com/zhy0504/PubChat_smart_literature_search/main/deploy/.env.example
+cp .env.example .env
 ```
 
 编辑 `/opt/pubchat/.env`，至少替换 `POSTGRES_PASSWORD`，并填写实际使用的模型服务配置。不要把真实密钥提交回 GitHub。
@@ -38,17 +39,20 @@ cp /opt/pubchat-src/deploy/.env.example /opt/pubchat/.env
 echo '<GHCR_READ_TOKEN>' | docker login ghcr.io -u '<GITHUB_USERNAME>' --password-stdin
 ```
 
-然后选择要部署的镜像标签：
+然后选择要部署的 GitHub Actions 镜像标签。推荐使用提交短 SHA，例如 `sha-09d394c`：
 
 ```bash
 cd /opt/pubchat
-export IMAGE_TAG=sha-8196a48
+export IMAGE_TAG=sha-09d394c
+docker compose --env-file .env -f docker-compose.prod.yml config
 docker compose --env-file .env -f docker-compose.prod.yml pull
 docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
 docker compose --env-file .env -f docker-compose.prod.yml ps
 ```
 
-只想跟随最新构建时，将 `IMAGE_TAG` 改为 `latest`。更新版本时重复执行拉取和启动命令即可；数据库、Redis、文档和日志保存在命名卷中。
+只想跟随最新构建时，将 `IMAGE_TAG` 改为 `latest`。更新版本时重新设置标签并重复 `pull`、`up -d` 即可；数据库、Redis、文档和日志保存在命名卷中。
+
+回滚时把 `IMAGE_TAG` 改回上一个已知可用的 SHA，再执行同样的两条命令。`init.sql` 只会在 PostgreSQL 数据卷首次创建时执行，升级时不会覆盖现有数据。
 
 ## 当前仓库边界
 
