@@ -349,8 +349,71 @@ fi
 
 chmod 600 "$env_file"
 
+db_user="$(read_env_value POSTGRES_USER "$env_file")"
+db_user="${db_user:-pubchat}"
+db_name="$(read_env_value POSTGRES_DB "$env_file")"
+db_name="${db_name:-postgres}"
+
 compose() {
   docker_cmd compose --env-file "$env_file" -f "$compose_file" "$@"
+}
+
+show_service_logs() {
+  compose logs --tail=100 postgres redis search-server celery-worker web || true
+}
+
+wait_for_postgres() {
+  echo "等待 PostgreSQL 就绪..."
+  for ((attempt = 1; attempt <= 60; attempt++)); do
+    # TCP readiness only becomes true after the entrypoint has finished init scripts.
+    if compose exec -T postgres pg_isready -h 127.0.0.1 -U "$db_user" -d "$db_name" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "PostgreSQL 未就绪，最近日志："
+  compose logs --tail=100 postgres || true
+  return 1
+}
+
+wait_for_redis() {
+  echo "等待 Redis 就绪..."
+  for ((attempt = 1; attempt <= 60; attempt++)); do
+    if compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "Redis 未就绪，最近日志："
+  compose logs --tail=100 redis || true
+  return 1
+}
+
+initialize_database() {
+  local state
+
+  state="$(compose exec -T postgres psql -U "$db_user" -d "$db_name" -tAc \
+    "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'userSchema' AND table_name = 'tasks') AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'userSchema' AND table_name = 'documents') THEN 'complete' WHEN EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'userSchema' AND table_name IN ('tasks', 'documents')) THEN 'partial' ELSE 'empty' END;" \
+    2>/dev/null | tr -d '[:space:]' || true)"
+
+  case "$state" in
+    complete)
+      echo "检测到数据库表已存在，跳过初始化。"
+      ;;
+    empty)
+      echo "未检测到数据库表，正在初始化..."
+      compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$db_name" < "$init_file" \
+        || die "数据库初始化失败，请检查 ${init_file} 和 PostgreSQL 日志。"
+      ;;
+    partial)
+      die "数据库表结构不完整，请先检查 PostgreSQL 日志，未自动覆盖现有数据。"
+      ;;
+    *)
+      die "无法读取数据库状态，请检查 PostgreSQL 日志。"
+      ;;
+  esac
 }
 
 echo
@@ -360,8 +423,21 @@ compose config --quiet || die "Compose 配置校验失败，请检查 ${env_file
 echo "正在拉取镜像..."
 compose pull || die "镜像拉取失败，请检查 GHCR 包可见性、镜像标签和服务器网络。"
 
-echo "正在启动服务..."
-compose up -d --remove-orphans || die "服务启动失败，请执行：docker compose --env-file ${env_file} -f ${compose_file} logs"
+echo "正在启动 PostgreSQL 和 Redis..."
+if ! compose up -d postgres redis; then
+  show_service_logs
+  die "数据库或 Redis 启动失败。"
+fi
+
+wait_for_postgres || die "PostgreSQL 启动失败。"
+wait_for_redis || die "Redis 启动失败。"
+initialize_database
+
+echo "正在启动应用服务..."
+if ! compose up -d --remove-orphans search-server celery-worker web; then
+  show_service_logs
+  die "应用服务启动失败。"
+fi
 
 echo "等待 API 就绪..."
 ready=0
