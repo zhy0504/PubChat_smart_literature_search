@@ -34,8 +34,9 @@ jobs:
       - name: Validate production Compose
         run: |
           cp deploy/.env.example deploy/.env
-          docker compose --env-file deploy/.env -f deploy/docker-compose.prod.yml config >/dev/null
-          rm deploy/.env
+          cp db/postgres/init.sql deploy/init.sql
+          trap 'rm -f deploy/.env deploy/init.sql' EXIT
+          docker compose --env-file deploy/.env -f deploy/docker-compose.prod.yml config
 
       - name: Generate web image metadata
         id: meta_web
