@@ -38,7 +38,11 @@ services:
     restart: always
 
   celery-worker:
-    image: wuyuxuan1037/pubchat-celery-worker:latest
+    build:
+      context: .
+      dockerfile: ./backend/celery_worker/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     container_name: celery-worker
     env_file:
       - ./common_utils/.env.shared

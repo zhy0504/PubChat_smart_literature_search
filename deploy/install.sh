@@ -6,6 +6,8 @@ umask 077
 REPO_RAW="https://raw.githubusercontent.com/zhy0504/PubChat_smart_literature_search"
 SUDO_CMD=()
 DOCKER_CMD=(docker)
+COMPOSE_CMD=()
+COMPOSE_MODE=""
 PACKAGE_MANAGER=""
 
 die() {
@@ -75,7 +77,7 @@ detect_package_manager() {
     fi
   fi
 
-  [[ -n "$PACKAGE_MANAGER" ]] || die "未识别的 Linux 发行版，无法自动安装 Docker。请先手动安装 Docker Engine 和 Docker Compose 插件。"
+  [[ -n "$PACKAGE_MANAGER" ]] || die "未识别的 Linux 发行版，无法自动安装 Docker。请先手动安装 Docker Engine 和 Docker Compose。"
 }
 
 install_packages() {
@@ -108,6 +110,10 @@ docker_cmd() {
   "${DOCKER_CMD[@]}" "$@"
 }
 
+compose_cmd() {
+  "${COMPOSE_CMD[@]}" "$@"
+}
+
 set_docker_command() {
   DOCKER_CMD=(docker)
   command -v docker >/dev/null 2>&1 || return 1
@@ -124,9 +130,36 @@ set_docker_command() {
   return 1
 }
 
+set_compose_command() {
+  local -a legacy_cmd
+
+  COMPOSE_CMD=()
+  COMPOSE_MODE=""
+
+  if docker_cmd compose version --short >/dev/null 2>&1 || \
+    docker_cmd compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=("${DOCKER_CMD[@]}" compose)
+    COMPOSE_MODE="v2"
+    return 0
+  fi
+
+  if [[ "${DOCKER_CMD[0]:-}" == "sudo" ]]; then
+    legacy_cmd=(sudo docker-compose)
+  else
+    legacy_cmd=(docker-compose)
+  fi
+
+  if "${legacy_cmd[@]}" version >/dev/null 2>&1; then
+    COMPOSE_CMD=("${legacy_cmd[@]}")
+    COMPOSE_MODE="legacy"
+    return 0
+  fi
+
+  return 1
+}
+
 compose_ready() {
-  docker_cmd compose version --short >/dev/null 2>&1 || \
-    docker_cmd compose version >/dev/null 2>&1
+  set_compose_command
 }
 
 start_docker_service() {
@@ -146,6 +179,16 @@ install_compose_plugin() {
 
   hash -r 2>/dev/null || true
   compose_ready
+}
+
+install_legacy_compose() {
+  echo "正在尝试安装兼容模式 docker-compose..."
+  if ! install_packages docker-compose; then
+    return 1
+  fi
+
+  hash -r 2>/dev/null || true
+  compose_ready && [[ "$COMPOSE_MODE" == "legacy" ]]
 }
 
 install_docker() {
@@ -174,7 +217,9 @@ install_docker() {
   set_docker_command || die "Docker 已安装，但无法连接 Docker 服务。"
 
   if ! compose_ready; then
-    install_compose_plugin || die "Docker Compose 插件安装失败。"
+    if ! install_compose_plugin && ! install_legacy_compose; then
+      die "Docker Compose 安装失败，请安装 Compose v2 插件或 docker-compose 后重试。"
+    fi
   fi
 }
 
@@ -201,12 +246,12 @@ ensure_docker() {
 
   (( docker_available )) || missing+=("Docker Engine")
   if (( docker_available == 0 )) || ! compose_ready; then
-    missing+=("Docker Compose 插件")
+    missing+=("Docker Compose v2 或兼容 docker-compose")
   fi
 
   missing_text="$(IFS='、'; printf '%s' "${missing[*]}")"
   echo "未检测到：${missing_text}。"
-  confirm "是否现在自动安装/修复 Docker 环境？" || die "请先准备 Docker Engine 和 Docker Compose 插件后重试。"
+  confirm "是否现在自动安装/修复 Docker 环境？" || die "请先准备 Docker Engine 和 Docker Compose 后重试。"
 
   if (( docker_available )) && ! compose_ready; then
     if ! install_compose_plugin; then
@@ -218,7 +263,12 @@ ensure_docker() {
   fi
 
   set_docker_command || die "Docker 安装完成，但当前用户无法访问 Docker。请重新登录后重试。"
-  compose_ready || die "Docker Compose 插件安装失败。"
+  compose_ready || die "Docker Compose 安装失败，请安装 Compose v2 插件或 docker-compose 后重试。"
+  if [[ "$COMPOSE_MODE" == "legacy" ]]; then
+    echo "警告：未检测到 Compose v2，当前将使用兼容模式 docker-compose。"
+  else
+    echo "已检测到 Docker Compose v2。"
+  fi
 }
 
 read_env_value() {
@@ -421,6 +471,12 @@ set_env_value "WEB_BIND_ADDRESS" "$web_bind_address" "$env_file"
 set_env_value "PROJECT_ENV" "production" "$env_file"
 if [[ -n "${CELERY_WORKER_IMAGE:-}" ]]; then
   set_env_value "CELERY_WORKER_IMAGE" "$CELERY_WORKER_IMAGE" "$env_file"
+else
+  existing_worker_image="$(read_env_value CELERY_WORKER_IMAGE "$env_file")"
+  if [[ "$existing_worker_image" == wuyuxuan1037/pubchat-celery-worker:* ]]; then
+    # Migrate the old external worker override to the matching GHCR image.
+    set_env_value "CELERY_WORKER_IMAGE" "" "$env_file"
+  fi
 fi
 
 current_password="$(read_env_value POSTGRES_PASSWORD "$env_file")"
@@ -454,7 +510,7 @@ db_name="$(read_env_value POSTGRES_DB "$env_file")"
 db_name="${db_name:-postgres}"
 
 compose() {
-  docker_cmd compose --env-file "$env_file" -f "$compose_file" "$@"
+  compose_cmd --env-file "$env_file" -f "$compose_file" "$@"
 }
 
 show_service_logs() {

@@ -91,6 +91,7 @@ The study also included 279 biomedical researchers from 18 countries and regions
    - If payment is required, use a valid U.S. billing address that matches the payment method.
    - After registration, create and copy an API key from the [OpenRouter API Keys](https://openrouter.ai/workspaces/default/keys) page. In PubChat, select `OpenRouter · Gemini` and enter this key.
    - API keys are sensitive credentials. Do not publish them, share them in screenshots, or commit them to a Git repository.
+   - You can also enable the custom endpoint option to use any service compatible with the OpenAI Chat Completions API.
 
 ## Quick Installation
 
@@ -99,7 +100,7 @@ The study also included 279 biomedical researchers from 18 countries and regions
 Open Terminal, copy the entire command below, and run it:
 
 ```bash
-curl -L -o PubChat.zip https://github.com/PubChatOfficial/PubChat_smart_literature_search/archive/refs/heads/main.zip && unzip -q PubChat.zip && cd PubChat_smart_literature_search-main && if ! docker image inspect python:3.11-slim >/dev/null 2>&1; then docker pull python:3.11-slim; fi && if docker image inspect wuyuxuan1037/pubchat-celery-worker:latest >/dev/null 2>&1; then docker image rm -f wuyuxuan1037/pubchat-celery-worker:latest; fi && docker compose up -d --build && rm ../PubChat.zip
+curl -L -o PubChat.zip https://github.com/zhy0504/PubChat_smart_literature_search/archive/refs/heads/main.zip && unzip -q PubChat.zip && cd PubChat_smart_literature_search-main && docker compose up -d --build && rm ../PubChat.zip
 ```
 
 ### Windows
@@ -107,7 +108,7 @@ curl -L -o PubChat.zip https://github.com/PubChatOfficial/PubChat_smart_literatu
 Avoid installing the project in the system-drive directory, where permission restrictions may cause the installation to fail. Press `Win`, search for PowerShell, open it, and run:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literature_search/archive/refs/heads/main.zip" -OutFile "PubChat.zip"; Expand-Archive -Path "PubChat.zip" -DestinationPath "." -Force; Set-Location "PubChat_smart_literature_search-main"; docker image inspect python:3.11-slim *> $null; if ($LASTEXITCODE -ne 0) { docker pull python:3.11-slim }; docker image inspect wuyuxuan1037/pubchat-celery-worker:latest *> $null; if ($LASTEXITCODE -eq 0) { docker image rm -f wuyuxuan1037/pubchat-celery-worker:latest }; docker compose up -d --build; Remove-Item "..\PubChat.zip" -Force
+Invoke-WebRequest -Uri "https://github.com/zhy0504/PubChat_smart_literature_search/archive/refs/heads/main.zip" -OutFile "PubChat.zip"; Expand-Archive -Path "PubChat.zip" -DestinationPath "." -Force; Set-Location "PubChat_smart_literature_search-main"; docker compose up -d --build; Remove-Item "..\PubChat.zip" -Force
 ```
 
 The first installation downloads several Docker images and may take some time depending on network conditions. Wait until the required containers have started.
@@ -115,7 +116,7 @@ The first installation downloads several Docker images and may take some time de
 ## Getting Started
 
 1. Open <http://localhost:8000> in a browser.
-2. Select a model service and enter the corresponding API key. For OpenRouter, select `OpenRouter · Gemini`.
+2. Select a model service and enter the corresponding API key. You can also enable the custom endpoint option and enter an OpenAI-compatible Base URL and model name.
 3. Enter the medical or research question you want to investigate.
 4. Select Broad, Standard, or Core mode and choose an output language.
 5. Submit the task and wait for the system to complete retrieval, screening, and stratification.

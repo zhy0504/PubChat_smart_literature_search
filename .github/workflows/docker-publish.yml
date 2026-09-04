@@ -79,3 +79,24 @@ jobs:
           labels: ${{ steps.meta_api.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Generate celery-worker image metadata
+        id: meta_worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/pubchat-celery-worker
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=sha-
+            type=ref,event=tag
+
+      - name: Build and push celery-worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/celery_worker/Dockerfile
+          push: true
+          tags: ${{ steps.meta_worker.outputs.tags }}
+          labels: ${{ steps.meta_worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

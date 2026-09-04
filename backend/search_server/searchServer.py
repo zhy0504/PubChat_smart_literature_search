@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import asyncpg
+from urllib.parse import urlparse
 from quart import Quart, request, jsonify
 from celery import Celery
 from common_utils.logger import setup_logging
@@ -32,6 +33,156 @@ DB_CONFIG = {
     "port": os.getenv("POSTGRES_PORT")
 }
 
+
+_MODEL_PRESETS = {
+    "google_gemini": {
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite-preview",
+    },
+    "openrouter_gemini": {
+        "provider": "openrouter",
+        "base_url": os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        "model": (
+            os.getenv("OPENROUTER_MODEL")
+            or os.getenv("OPENROUTER_GEMINI_FLASH_MODEL")
+            or os.getenv("OPENROUTER_GEMINI_PRO_MODEL")
+            or "google/gemini-3.1-flash-lite-preview"
+        ),
+    },
+}
+
+_PROVIDER_ALIASES = {
+    "google": "google",
+    "gemini": "google",
+    "google-gemini": "google",
+    "openrouter": "openrouter",
+    "openrouter-gemini": "openrouter",
+    "openai": "openai-compatible",
+    "openai-compatible": "openai-compatible",
+    "openai_compatible": "openai-compatible",
+    "deepseek": "openai-compatible",
+    "qwen": "openai-compatible",
+    "siliconflow": "openai-compatible",
+    "ollama": "openai-compatible",
+    "lmstudio": "openai-compatible",
+    "groq": "openai-compatible",
+    "together": "openai-compatible",
+    "fireworks": "openai-compatible",
+    "mistral": "openai-compatible",
+    "moonshot": "openai-compatible",
+    "kimi": "openai-compatible",
+    "glm": "openai-compatible",
+    "zhipu": "openai-compatible",
+    "anthropic": "anthropic",
+    "claude": "anthropic",
+    "cohere": "cohere",
+}
+
+
+def _as_string_list(value):
+    """Normalize arrays and legacy delimited strings without logging secrets."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        values = value.replace("\r", "\n").replace(";", "\n").replace(",", "\n").split("\n")
+    else:
+        values = value
+    return [str(item).strip() for item in values if str(item).strip()]
+
+
+def _normalise_llm_config(raw_config):
+    """Validate and normalize the public task API's LLM configuration."""
+    if raw_config is None:
+        raw = {}
+    elif isinstance(raw_config, dict):
+        raw = dict(raw_config)
+    else:
+        raise ValueError("llm_config 必须是 JSON 对象")
+    model = str(raw.get("model") or "").strip()
+    provider = str(raw.get("provider") or "").strip().lower()
+    base_url = str(raw.get("base_url") or "").strip().rstrip("/")
+
+    preset = _MODEL_PRESETS.get(model.lower())
+    if preset:
+        provider = provider or preset["provider"]
+        model = str(raw.get("custom_model") or preset["model"]).strip()
+        base_url = base_url or str(preset.get("base_url") or "").strip().rstrip("/")
+
+    if model == "__custom__":
+        model = str(raw.get("custom_model") or "").strip()
+
+    provider = _PROVIDER_ALIASES.get(provider, provider)
+    if not provider:
+        provider = "openai-compatible" if base_url else "google"
+    if provider not in {"google", "openrouter", "openai-compatible", "anthropic", "cohere"}:
+        raise ValueError("不支持的 AI 提供商")
+
+    if not model:
+        model_defaults = {
+            "google": os.getenv("GOOGLE_GEMINI_MODEL", "gemini-flash-lite-latest"),
+            "openrouter": (
+                os.getenv("OPENROUTER_MODEL")
+                or os.getenv("OPENROUTER_GEMINI_FLASH_MODEL")
+                or os.getenv("OPENROUTER_GEMINI_PRO_MODEL")
+                or "google/gemini-3.1-flash-lite-preview"
+            ),
+            "openai-compatible": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            "anthropic": os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"),
+            "cohere": os.getenv("COHERE_MODEL", "command-r-plus"),
+        }
+        model = model_defaults[provider]
+
+    if provider == "openrouter":
+        base_url = base_url or os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    elif provider == "openai-compatible" and not base_url:
+        raise ValueError("OpenAI 兼容接口必须填写 base_url")
+
+    if not model:
+        raise ValueError("必须填写模型名称")
+
+    if base_url:
+        parsed = urlparse(base_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("base_url 必须是完整的 http(s) 地址，且不能包含账号、密码或查询参数")
+        if len(base_url) > 2048:
+            raise ValueError("base_url 过长")
+
+    api_keys = _as_string_list(raw.get("api") or raw.get("api_keys"))
+    if not api_keys:
+        raise ValueError("至少填写一个 AI API Key")
+
+    return {
+        "provider": provider,
+        "base_url": base_url or None,
+        "model": model,
+        "api": api_keys,
+        "pubmed_api": _as_string_list(raw.get("pubmed_api") or raw.get("pubmed_api_keys")),
+    }
+
+
+@app.before_serving
+async def ensure_task_config_columns():
+    """Migrate existing deployments before accepting tasks."""
+    conn = await asyncpg.connect(**DB_CONFIG)
+    try:
+        await conn.execute(
+            'ALTER TABLE IF EXISTS "userSchema"."tasks" '
+            'ADD COLUMN IF NOT EXISTS provider varchar'
+        )
+        await conn.execute(
+            'ALTER TABLE IF EXISTS "userSchema"."tasks" '
+            'ADD COLUMN IF NOT EXISTS base_url varchar'
+        )
+    finally:
+        await conn.close()
+
 @app.route('/health', methods=['GET'])
 async def health_check():
     logger.info("Health check requested.")
@@ -41,7 +192,25 @@ async def health_check():
 async def create_search_task():
     logger.info("Search requested.")
     # user_id = g.user_id
-    data = await request.get_json()
+    try:
+        data = await request.get_json()
+    except Exception:
+        return jsonify({
+            "success": False,
+            "message": {"zh": "请求体必须是有效的 JSON", "en": "Request body must be valid JSON"},
+        }), 400
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "message": {"zh": "请求体必须是 JSON 对象", "en": "Request body must be a JSON object"},
+        }), 400
+    try:
+        llm_config = _normalise_llm_config(data.get('llm_config'))
+    except ValueError as exc:
+        return jsonify({
+            "success": False,
+            "message": {"zh": str(exc), "en": str(exc)},
+        }), 400
     
     conn = None
     redis_client = None
@@ -84,20 +253,17 @@ async def create_search_task():
             s_settings = data.get('search_settings') or {}
             s_filters = data.get('search_filters') or {}
             j_filters = data.get('journal_filters') or {}
-            ai_filters = data.get('llm_config') or {}
-        
-
             insert_query = """
                 INSERT INTO "userSchema"."tasks" (
                     output_language, user_query,
                     max_refinement_attempts, min_study_threshold,
                     time, author, first_author, last_author, affiliation, journal, custom,
-                    impact_factor, jcr_zone, cas_zone, model, api, pubmed_api
+                    impact_factor, jcr_zone, cas_zone, provider, base_url, model, api, pubmed_api
                 ) VALUES (
                     $1, $2, $3,
                     $4, $5,
                     $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17
+                    $13, $14, $15, $16, $17, $18, $19
                 ) RETURNING id
             """
             
@@ -121,9 +287,11 @@ async def create_search_task():
                 j_filters.get('jcr_zone'),
                 j_filters.get('cas_zone'),
                 # LLM Config
-                ai_filters.get('model'),
-                ai_filters.get('api'),
-                ai_filters.get('pubmed_api')
+                llm_config['provider'],
+                llm_config['base_url'],
+                llm_config['model'],
+                llm_config['api'],
+                llm_config['pubmed_api']
             )
             
             # 4. Push to Celery

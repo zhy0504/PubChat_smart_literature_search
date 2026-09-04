@@ -53,6 +53,8 @@ CREATE TABLE "userSchema".tasks (
 	impact_factor varchar NULL,
 	jcr_zone varchar NULL,
 	cas_zone varchar NULL,
+	provider varchar NULL,
+	base_url varchar NULL,
 	create_time timestamptz DEFAULT now() NULL,
 	status varchar DEFAULT 'pending'::character varying NULL,
 	model varchar NULL,

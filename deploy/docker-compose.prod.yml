@@ -42,9 +42,9 @@ services:
     restart: unless-stopped
 
   celery-worker:
-    # The upstream repository does not contain the worker source code, so this
-    # image remains an explicit external dependency until that source is supplied.
-    image: ${CELERY_WORKER_IMAGE:-wuyuxuan1037/pubchat-celery-worker:latest}
+    image: ${CELERY_WORKER_IMAGE:-${IMAGE_PREFIX:-ghcr.io/zhy0504}/pubchat-celery-worker:${IMAGE_TAG:-latest}}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - ./.env
     environment:

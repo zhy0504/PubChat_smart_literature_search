@@ -91,6 +91,7 @@ PubChat 将检索式设计、反复检索、去重、初筛和相关性判断串
    - 如需付款，账单地址需使用与支付方式一致的有效美国地址。
    - 注册完成后，在 [OpenRouter API Keys](https://openrouter.ai/workspaces/default/keys) 页面创建并复制 API Key；进入 PubChat 后选择 `OpenRouter · Gemini` 并填写该 Key。
    - API Key 属于敏感凭据，请勿公开、截图分享或提交到 Git 仓库。
+   - 也可以在页面勾选“使用自定义地址和模型”，接入任意兼容 OpenAI Chat Completions 接口的服务。
 
 ## 快速安装
 
@@ -99,7 +100,7 @@ PubChat 将检索式设计、反复检索、去重、初筛和相关性判断串
 打开“终端（Terminal）”，复制并运行下面的完整命令：
 
 ```bash
-curl -L -o PubChat.zip https://github.com/PubChatOfficial/PubChat_smart_literature_search/archive/refs/heads/main.zip && unzip -q PubChat.zip && cd PubChat_smart_literature_search-main && if ! docker image inspect python:3.11-slim >/dev/null 2>&1; then docker pull python:3.11-slim; fi && if docker image inspect wuyuxuan1037/pubchat-celery-worker:latest >/dev/null 2>&1; then docker image rm -f wuyuxuan1037/pubchat-celery-worker:latest; fi && docker compose up -d --build && rm ../PubChat.zip
+curl -L -o PubChat.zip https://github.com/zhy0504/PubChat_smart_literature_search/archive/refs/heads/main.zip && unzip -q PubChat.zip && cd PubChat_smart_literature_search-main && docker compose up -d --build && rm ../PubChat.zip
 ```
 
 ### Windows
@@ -107,7 +108,7 @@ curl -L -o PubChat.zip https://github.com/PubChatOfficial/PubChat_smart_literatu
 建议不要安装在系统盘目录，以免因权限问题导致安装失败。按 `Win` 键，搜索并打开 PowerShell，然后运行：
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literature_search/archive/refs/heads/main.zip" -OutFile "PubChat.zip"; Expand-Archive -Path "PubChat.zip" -DestinationPath "." -Force; Set-Location "PubChat_smart_literature_search-main"; docker image inspect python:3.11-slim *> $null; if ($LASTEXITCODE -ne 0) { docker pull python:3.11-slim }; docker image inspect wuyuxuan1037/pubchat-celery-worker:latest *> $null; if ($LASTEXITCODE -eq 0) { docker image rm -f wuyuxuan1037/pubchat-celery-worker:latest }; docker compose up -d --build; Remove-Item "..\PubChat.zip" -Force
+Invoke-WebRequest -Uri "https://github.com/zhy0504/PubChat_smart_literature_search/archive/refs/heads/main.zip" -OutFile "PubChat.zip"; Expand-Archive -Path "PubChat.zip" -DestinationPath "." -Force; Set-Location "PubChat_smart_literature_search-main"; docker compose up -d --build; Remove-Item "..\PubChat.zip" -Force
 ```
 
 首次安装需要下载 Docker 镜像，耗时取决于网络状况。请等待相关容器启动完成。
@@ -115,7 +116,7 @@ Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literat
 ## 开始使用
 
 1. 在浏览器中打开 <http://localhost:8000>。
-2. 选择模型服务并填写对应的 API Key；使用 OpenRouter 时请选择 `OpenRouter · Gemini`。
+2. 选择模型服务并填写对应的 API Key；也可以勾选“使用自定义地址和模型”，填写 OpenAI 兼容接口的 Base URL 和模型名称。
 3. 输入需要检索的医学或科研问题。
 4. 根据任务选择 Broad、Standard 或 Core 模式，并设置输出语言。
 5. 提交任务，等待系统完成检索、筛选与分层。
