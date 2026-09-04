@@ -123,7 +123,7 @@ The first installation downloads several Docker images and may take some time de
 
 ## Service Management
 
-For automated image builds and server deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For automated image builds and manual server deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### Stop or Restart
 

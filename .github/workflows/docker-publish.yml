@@ -1,4 +1,4 @@
-name: Build and deploy PubChat
+name: Build PubChat Docker images
 
 on:
   push:
@@ -79,53 +79,3 @@ jobs:
           labels: ${{ steps.meta_api.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy:
-    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out deployment files
-        uses: actions/checkout@v4
-
-      - name: Load SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Trust deployment host
-        env:
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-
-      - name: Upload production Compose
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          scp -P "${DEPLOY_PORT:-22}" deploy/docker-compose.prod.yml \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.prod.yml"
-          scp -P "${DEPLOY_PORT:-22}" db/postgres/init.sql \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/init.sql"
-
-      - name: Deploy pinned image tag
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-        run: |
-          IMAGE_TAG="sha-${GITHUB_SHA:0:7}"
-          if [ -n "$GHCR_TOKEN" ]; then
-            printf '%s' "$GHCR_TOKEN" | ssh -p "${DEPLOY_PORT:-22}" \
-              "$DEPLOY_USER@$DEPLOY_HOST" \
-              "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
-          fi
-          ssh -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && IMAGE_TAG='$IMAGE_TAG' docker compose --env-file .env -f docker-compose.prod.yml pull && IMAGE_TAG='$IMAGE_TAG' docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans && docker image prune -f"

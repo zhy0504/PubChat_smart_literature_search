@@ -123,7 +123,7 @@ Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literat
 
 ## 服务管理
 
-需要自动构建并部署到服务器时，请参阅 [DEPLOYMENT.md](DEPLOYMENT.md)。
+需要自动构建镜像并手动部署到服务器时，请参阅 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ### 停止或重新启动
 

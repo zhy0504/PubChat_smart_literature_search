@@ -1,17 +1,15 @@
-# PubChat Docker 自动构建与部署
+# PubChat Docker 自动构建与手动部署
 
-这个 fork 已加入 GitHub Actions：向 `main` 推送代码时，会构建并推送两个 GHCR 镜像：
+这个 fork 的 GitHub Actions 只负责构建并推送 Docker 镜像，不连接服务器、不执行远程部署。向 `main` 推送代码，或推送 `v*.*.*` 标签时，会发布两个 GHCR 镜像：
 
 - `ghcr.io/zhy0504/pubchat-web`
 - `ghcr.io/zhy0504/pubchat-search-server`
 
-随后 Actions 通过 SSH 到服务器执行生产 Compose 更新。数据库、Redis、检索服务和 worker 都在同一个私有 Docker 网络中，部署使用提交 SHA 标签，而不是漂移的 `latest`。
+镜像标签包括 `latest`、提交短 SHA（例如 `sha-8196a48`）和版本标签。生产环境建议使用提交 SHA 标签，便于回滚。
 
 ## 服务器准备
 
-在服务器安装 Docker Engine 和 Compose v2，创建部署目录，例如 `/opt/pubchat`，并将 `deploy/.env.example` 复制为 `/opt/pubchat/.env` 后填写真实值。至少需要修改 `POSTGRES_PASSWORD`，并补充实际使用的模型服务密钥。
-
-将 `db/postgres/init.sql` 放到 `/opt/pubchat/../db/postgres/init.sql` 对应的位置，或把仓库根目录同步到服务器后在仓库根目录执行 Compose。最简单的目录布局是：
+服务器需要 Docker Engine 和 Compose v2。创建部署目录，例如 `/opt/pubchat`，并准备以下文件：
 
 ```text
 /opt/pubchat/
@@ -20,28 +18,37 @@
   init.sql
 ```
 
-Actions 会自动把 `docker-compose.prod.yml` 和 `db/postgres/init.sql` 上传到这个目录。
-
-## GitHub Secrets
-
-在 fork 的 `Settings -> Secrets and variables -> Actions` 中设置：
-
-- `DEPLOY_HOST`：服务器域名或 IP
-- `DEPLOY_PORT`：SSH 端口，可填 `22`
-- `DEPLOY_USER`：部署用户
-- `DEPLOY_PATH`：服务器部署目录，例如 `/opt/pubchat`
-- `DEPLOY_SSH_KEY`：部署用户私钥
-- `DEPLOY_KNOWN_HOSTS`：服务器的 SSH 主机指纹
-- `GHCR_USERNAME`、`GHCR_TOKEN`：当 GHCR 镜像为私有时填写；令牌只需 `read:packages`
-
-再在 `Settings -> Secrets and variables -> Actions -> Variables` 中新增 `DEPLOY_ENABLED=true`。未设置这个变量时，推送仍会自动构建并推送镜像，但不会尝试连接服务器。
-
-首次运行前，确保服务器目录中已经有 `.env`。之后每次合并到 `main`，Actions 会构建镜像、推送 GHCR，并在服务器执行：
+首次准备可以从仓库复制：
 
 ```bash
-IMAGE_TAG=sha-<commit> docker compose --env-file .env -f docker-compose.prod.yml pull
-IMAGE_TAG=sha-<commit> docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+git clone https://github.com/zhy0504/PubChat_smart_literature_search.git /opt/pubchat-src
+mkdir -p /opt/pubchat
+cp /opt/pubchat-src/deploy/docker-compose.prod.yml /opt/pubchat/docker-compose.prod.yml
+cp /opt/pubchat-src/db/postgres/init.sql /opt/pubchat/init.sql
+cp /opt/pubchat-src/deploy/.env.example /opt/pubchat/.env
 ```
+
+编辑 `/opt/pubchat/.env`，至少替换 `POSTGRES_PASSWORD`，并填写实际使用的模型服务配置。不要把真实密钥提交回 GitHub。
+
+## 手动拉取并启动
+
+如果 GHCR 镜像为私有，先在服务器登录一次：
+
+```bash
+echo '<GHCR_READ_TOKEN>' | docker login ghcr.io -u '<GITHUB_USERNAME>' --password-stdin
+```
+
+然后选择要部署的镜像标签：
+
+```bash
+cd /opt/pubchat
+export IMAGE_TAG=sha-8196a48
+docker compose --env-file .env -f docker-compose.prod.yml pull
+docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env -f docker-compose.prod.yml ps
+```
+
+只想跟随最新构建时，将 `IMAGE_TAG` 改为 `latest`。更新版本时重复执行拉取和启动命令即可；数据库、Redis、文档和日志保存在命名卷中。
 
 ## 当前仓库边界
 
