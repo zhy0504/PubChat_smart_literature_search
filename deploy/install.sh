@@ -243,6 +243,74 @@ set_env_value() {
   fi
 }
 
+is_ipv4() {
+  local value="$1"
+  local octet
+  local first second third fourth
+
+  [[ "$value" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || return 1
+  IFS=. read -r first second third fourth <<< "$value"
+  for octet in "$first" "$second" "$third" "$fourth"; do
+    (( 10#$octet <= 255 )) || return 1
+  done
+}
+
+is_private_ipv4() {
+  local first second third fourth
+
+  is_ipv4 "$1" || return 1
+  IFS=. read -r first second third fourth <<< "$1"
+  ((
+    10#$first == 10 ||
+    (10#$first == 192 && 10#$second == 168) ||
+    (10#$first == 172 && 10#$second >= 16 && 10#$second <= 31)
+  ))
+}
+
+is_private_or_loopback_ipv4() {
+  local first
+
+  is_private_ipv4 "$1" || {
+    is_ipv4 "$1" || return 1
+    IFS=. read -r first _ _ _ <<< "$1"
+    (( 10#$first == 127 ))
+  }
+}
+
+detect_private_ipv4() {
+  local address
+
+  if command -v ip >/dev/null 2>&1; then
+    address="$(ip -4 -o addr show scope global 2>/dev/null | awk '
+      {
+        split($4, parts, "/");
+        if (parts[1] ~ /^10\./ || parts[1] ~ /^192\.168\./ || parts[1] ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
+          print parts[1];
+          exit;
+        }
+      }')"
+    [[ -n "$address" ]] && { printf '%s\n' "$address"; return 0; }
+  fi
+
+  if command -v hostname >/dev/null 2>&1; then
+    for address in $(hostname -I 2>/dev/null); do
+      if is_private_ipv4 "$address"; then
+        printf '%s\n' "$address"
+        return 0
+      fi
+    done
+  fi
+
+  printf '127.0.0.1\n'
+}
+
+confirm_public_access() {
+  local answer
+
+  read -r -p "公网模式会把 Web 端口暴露到所有网卡，且应用没有内置登录保护。输入 YES 继续: " answer
+  [[ "$answer" == "YES" || "$answer" == "yes" ]]
+}
+
 ensure_docker
 ensure_curl
 
@@ -265,6 +333,8 @@ ask "部署目录" "$default_dir" target_dir
 env_file="$target_dir/.env"
 existing_tag="$(read_env_value IMAGE_TAG "$env_file")"
 existing_port="$(read_env_value WEB_PORT "$env_file")"
+existing_access_mode="$(read_env_value ACCESS_MODE "$env_file")"
+existing_bind_address="$(read_env_value WEB_BIND_ADDRESS "$env_file")"
 default_tag="${IMAGE_TAG:-${existing_tag:-latest}}"
 default_port="${WEB_PORT:-${existing_port:-8000}}"
 if [[ ! "$default_port" =~ ^[0-9]+$ ]]; then
@@ -278,6 +348,33 @@ fi
 
 ask "PubChat 镜像标签" "$default_tag" image_tag
 ask "Web 端口" "$default_port" web_port
+
+default_access_mode="${ACCESS_MODE:-${existing_access_mode:-internal}}"
+case "$default_access_mode" in
+  public) default_access_choice="2" ;;
+  *) default_access_mode="internal"; default_access_choice="1" ;;
+esac
+ask "访问范围（1=内网，2=公网）" "$default_access_choice" access_choice
+case "$access_choice" in
+  1)
+    access_mode="internal"
+    default_bind_address="${WEB_BIND_ADDRESS:-${existing_bind_address:-}}"
+    if ! is_private_or_loopback_ipv4 "$default_bind_address"; then
+      default_bind_address="$(detect_private_ipv4)"
+    fi
+    ask "内网绑定 IPv4 地址（仅该网卡可访问）" "$default_bind_address" web_bind_address
+    is_private_or_loopback_ipv4 "$web_bind_address" || \
+      die "内网绑定地址必须是 RFC1918 私有 IPv4 或 127.0.0.1。"
+    ;;
+  2)
+    access_mode="public"
+    confirm_public_access || die "已取消公网模式；如需公网访问，请重新运行并输入 YES 确认。"
+    web_bind_address="0.0.0.0"
+    ;;
+  *)
+    die "访问范围只能填写 1（内网）或 2（公网）。"
+    ;;
+esac
 
 [[ "$web_port" =~ ^[0-9]+$ ]] || die "Web 端口必须是数字。"
 web_port_number=$((10#$web_port))
@@ -319,6 +416,8 @@ fi
 set_env_value "IMAGE_PREFIX" "ghcr.io/zhy0504" "$env_file"
 set_env_value "IMAGE_TAG" "$image_tag" "$env_file"
 set_env_value "WEB_PORT" "$web_port" "$env_file"
+set_env_value "ACCESS_MODE" "$access_mode" "$env_file"
+set_env_value "WEB_BIND_ADDRESS" "$web_bind_address" "$env_file"
 set_env_value "PROJECT_ENV" "production" "$env_file"
 if [[ -n "${CELERY_WORKER_IMAGE:-}" ]]; then
   set_env_value "CELERY_WORKER_IMAGE" "$CELERY_WORKER_IMAGE" "$env_file"
@@ -440,9 +539,11 @@ if ! compose up -d --remove-orphans search-server celery-worker web; then
 fi
 
 echo "等待 API 就绪..."
+health_host="$web_bind_address"
+[[ "$health_host" == "0.0.0.0" ]] && health_host="127.0.0.1"
 ready=0
 for ((attempt = 1; attempt <= 60; attempt++)); do
-  if curl -fsS "http://127.0.0.1:${web_port}/api/search/health" >/dev/null 2>&1; then
+  if curl -fsS "http://${health_host}:${web_port}/api/search/health" >/dev/null 2>&1; then
     ready=1
     break
   fi
@@ -460,5 +561,16 @@ fi
 echo
 echo "部署完成。"
 echo "部署目录：${target_dir}"
-echo "访问地址：http://服务器IP:${web_port}"
+if [[ "$access_mode" == "internal" ]]; then
+  if [[ "$web_bind_address" == 127.* ]]; then
+    echo "访问范围：仅本机（未检测到可用内网 IPv4）"
+  else
+    echo "访问范围：内网（绑定地址 ${web_bind_address}）"
+  fi
+  echo "访问地址：http://${web_bind_address}:${web_port}"
+else
+  echo "访问范围：公网（绑定所有网卡）"
+  echo "访问地址：http://服务器公网IP:${web_port}"
+  echo "安全提示：公网使用请在反向代理上配置 HTTPS、登录认证和防火墙规则。"
+fi
 echo "首次检索时，请在页面填写 AI API Key 和 NCBI PubMed API Key。"
