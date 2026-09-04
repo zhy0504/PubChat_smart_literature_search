@@ -309,6 +309,8 @@ echo "正在下载部署文件..."
 download_file "deploy/docker-compose.prod.yml" "$compose_file"
 download_file "db/postgres/init.sql" "$init_file"
 download_file "deploy/.env.example" "$env_example_file"
+# PostgreSQL reads init.sql as its non-root postgres user through a bind mount.
+chmod 644 "$compose_file" "$init_file" "$env_example_file"
 
 if [[ ! -f "$env_file" ]]; then
   cp "$env_example_file" "$env_file"
