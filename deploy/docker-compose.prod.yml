@@ -1,0 +1,106 @@
+services:
+  web:
+    image: ${IMAGE_PREFIX:-ghcr.io/zhy0504}/pubchat-web:${IMAGE_TAG:-latest}
+    ports:
+      - "${WEB_PORT:-8000}:80"
+    volumes:
+      - pubchat_documents:/app/search_result:ro
+    depends_on:
+      search-server:
+        condition: service_healthy
+    networks:
+      - pubchat_network
+    restart: unless-stopped
+
+  search-server:
+    image: ${IMAGE_PREFIX:-ghcr.io/zhy0504}/pubchat-search-server:${IMAGE_TAG:-latest}
+    env_file:
+      - ./.env
+    environment:
+      PROJECT_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - pubchat_documents:/app/search_result
+      - pubchat_logs:/app/logs
+    command: hypercorn backend.search_server.searchServer:app --bind 0.0.0.0:8000
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - pubchat_network
+    restart: unless-stopped
+
+  celery-worker:
+    # The upstream repository does not contain the worker source code, so this
+    # image remains an explicit external dependency until that source is supplied.
+    image: ${CELERY_WORKER_IMAGE:-wuyuxuan1037/pubchat-celery-worker:latest}
+    env_file:
+      - ./.env
+    environment:
+      BASE_URL_API: http://search-server:8000/
+    depends_on:
+      search-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - pubchat_documents:/app/celery_worker/search_code/search_result
+      - pubchat_logs:/app/celery_worker/search_code/logs
+    command: celery -A celery_worker.celery_worker.celery_app worker --loglevel=info -Q search_queue --concurrency=4
+    networks:
+      - pubchat_network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pubchat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - pubchat_postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pubchat_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - pubchat_redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pubchat_network
+    restart: unless-stopped
+
+volumes:
+  pubchat_postgres_data:
+  pubchat_redis_data:
+  pubchat_documents:
+  pubchat_logs:
+
+networks:
+  pubchat_network:
+    driver: bridge

@@ -123,6 +123,8 @@ Invoke-WebRequest -Uri "https://github.com/PubChatOfficial/PubChat_smart_literat
 
 ## 服务管理
 
+需要自动构建并部署到服务器时，请参阅 [DEPLOYMENT.md](DEPLOYMENT.md)。
+
 ### 停止或重新启动
 
 打开 Docker Desktop，在左侧 `Containers` 中找到 PubChat 相关容器，点击停止或重新启动按钮。

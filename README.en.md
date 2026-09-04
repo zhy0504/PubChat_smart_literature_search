@@ -123,6 +123,8 @@ The first installation downloads several Docker images and may take some time de
 
 ## Service Management
 
+For automated image builds and server deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ### Stop or Restart
 
 Open Docker Desktop, locate the PubChat containers under `Containers`, and use the stop or restart controls.
