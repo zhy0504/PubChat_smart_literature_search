@@ -1,6 +1,6 @@
 # PubChat Docker 自动构建与手动部署
 
-这个 fork 的 GitHub Actions 只负责构建并推送 Docker 镜像，不连接服务器、不执行远程部署。向 `main` 推送代码，或推送 `v*.*.*` 标签时，会发布两个 GHCR 镜像：
+这个 fork 的 GitHub Actions 只负责构建并推送 Docker 镜像，不连接服务器、不执行远程部署。将 GHCR 包设为 Public 后，向 `main` 推送代码，或推送 `v*.*.*` 标签时，会发布两个可匿名拉取的镜像：
 
 - `ghcr.io/zhy0504/pubchat-web`
 - `ghcr.io/zhy0504/pubchat-search-server`
@@ -31,15 +31,18 @@ cp .env.example .env
 
 编辑 `/opt/pubchat/.env`，至少替换 `POSTGRES_PASSWORD`，并填写实际使用的模型服务配置。不要把真实密钥提交回 GitHub。
 
+## 一次性设置 GHCR 为公有
+
+在 GitHub 的两个 Package settings 页面分别执行：`Package settings` -> `Danger Zone` -> `Change visibility` -> `Public`，然后输入包名确认：
+
+- [pubchat-web Package settings](https://github.com/users/zhy0504/packages/container/pubchat-web/settings)
+- [pubchat-search-server Package settings](https://github.com/users/zhy0504/packages/container/pubchat-search-server/settings)
+
+公有 Container Registry 包支持匿名拉取，服务器不需要 `docker login ghcr.io`。GitHub 将公有包改回私有限制为不可逆操作，请确认包内不含敏感信息。
+
 ## 手动拉取并启动
 
-如果 GHCR 镜像为私有，先在服务器登录一次：
-
-```bash
-echo '<GHCR_READ_TOKEN>' | docker login ghcr.io -u '<GITHUB_USERNAME>' --password-stdin
-```
-
-然后选择要部署的 GitHub Actions 镜像标签。推荐使用提交短 SHA，例如 `sha-09d394c`：
+选择要部署的 GitHub Actions 镜像标签。推荐使用提交短 SHA，例如 `sha-09d394c`：
 
 ```bash
 cd /opt/pubchat
