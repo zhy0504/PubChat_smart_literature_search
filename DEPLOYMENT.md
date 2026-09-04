@@ -1,6 +1,6 @@
 # PubChat 一键部署
 
-当前镜像适用于 Linux `amd64`，GHCR 镜像为公开包，不需要登录。脚本会自动检测 Docker Engine 和 Docker Compose v2；缺少时询问是否安装，支持 Ubuntu/Debian 及 RHEL/CentOS 系列，需要 root 或 sudo 权限。
+当前镜像适用于 Linux `amd64`，GHCR 镜像为公开包，不需要登录。脚本会自动检测 Docker Engine 和 Docker Compose 插件（`docker compose` 命令）；缺少时询问是否安装，支持 Ubuntu/Debian 及 RHEL/CentOS 系列，需要 root 或 sudo 权限。
 
 执行下面一条命令：
 

@@ -75,7 +75,7 @@ detect_package_manager() {
     fi
   fi
 
-  [[ -n "$PACKAGE_MANAGER" ]] || die "未识别的 Linux 发行版，无法自动安装 Docker。请先手动安装 Docker Engine 和 Compose v2。"
+  [[ -n "$PACKAGE_MANAGER" ]] || die "未识别的 Linux 发行版，无法自动安装 Docker。请先手动安装 Docker Engine 和 Docker Compose 插件。"
 }
 
 install_packages() {
@@ -124,11 +124,9 @@ set_docker_command() {
   return 1
 }
 
-compose_v2_ready() {
-  local version
-
-  version="$(docker_cmd compose version --short 2>/dev/null || true)"
-  [[ "$version" =~ ^v?2[.][0-9]+([.][0-9]+)?([-.].*)?$ ]]
+compose_ready() {
+  docker_cmd compose version --short >/dev/null 2>&1 || \
+    docker_cmd compose version >/dev/null 2>&1
 }
 
 start_docker_service() {
@@ -141,13 +139,13 @@ start_docker_service() {
 }
 
 install_compose_plugin() {
-  echo "正在安装 Docker Compose v2 插件..."
+  echo "正在安装 Docker Compose 插件..."
   if ! install_packages docker-compose-plugin; then
     return 1
   fi
 
   hash -r 2>/dev/null || true
-  compose_v2_ready
+  compose_ready
 }
 
 install_docker() {
@@ -175,8 +173,8 @@ install_docker() {
   start_docker_service
   set_docker_command || die "Docker 已安装，但无法连接 Docker 服务。"
 
-  if ! compose_v2_ready; then
-    install_compose_plugin || die "Docker Compose v2 安装失败。"
+  if ! compose_ready; then
+    install_compose_plugin || die "Docker Compose 插件安装失败。"
   fi
 }
 
@@ -187,7 +185,7 @@ ensure_docker() {
 
   if command -v docker >/dev/null 2>&1 && set_docker_command; then
     docker_available=1
-    if compose_v2_ready; then
+    if compose_ready; then
       return 0
     fi
   elif command -v docker >/dev/null 2>&1; then
@@ -195,22 +193,22 @@ ensure_docker() {
     start_docker_service
     if set_docker_command; then
       docker_available=1
-      if compose_v2_ready; then
+      if compose_ready; then
         return 0
       fi
     fi
   fi
 
   (( docker_available )) || missing+=("Docker Engine")
-  if (( docker_available == 0 )) || ! compose_v2_ready; then
-    missing+=("Docker Compose v2")
+  if (( docker_available == 0 )) || ! compose_ready; then
+    missing+=("Docker Compose 插件")
   fi
 
   missing_text="$(IFS='、'; printf '%s' "${missing[*]}")"
   echo "未检测到：${missing_text}。"
-  confirm "是否现在自动安装/修复 Docker 环境？" || die "请先准备 Docker Engine 和 Docker Compose v2 后重试。"
+  confirm "是否现在自动安装/修复 Docker 环境？" || die "请先准备 Docker Engine 和 Docker Compose 插件后重试。"
 
-  if (( docker_available )) && ! compose_v2_ready; then
+  if (( docker_available )) && ! compose_ready; then
     if ! install_compose_plugin; then
       echo "系统包中未提供 Compose 插件，正在使用 Docker 官方安装程序修复..."
       install_docker
@@ -220,7 +218,7 @@ ensure_docker() {
   fi
 
   set_docker_command || die "Docker 安装完成，但当前用户无法访问 Docker。请重新登录后重试。"
-  compose_v2_ready || die "Docker Compose v2 安装失败。"
+  compose_ready || die "Docker Compose 插件安装失败。"
 }
 
 read_env_value() {
